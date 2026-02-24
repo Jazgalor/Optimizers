@@ -46,7 +46,7 @@ class SGDNesterovTorch(torch.optim.Optimizer):
                 m.mul_(beta).add_(grad)
 
                 # update = grad + beta * m
-                update = grad + beta * m
+                update = grad.add(m, alpha=beta)
 
                 param.add_(update, alpha=-lr)
 
