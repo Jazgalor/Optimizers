@@ -3,7 +3,7 @@ from torch.optim import Optimizer
 import torch.optim.optimizer
 
 
-class TorchAdagrad(Optimizer):
+class AdagradTorch(Optimizer):
 
     def __init__(self, params, lr=1e-2, eps=1e-10):
 
