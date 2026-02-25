@@ -2,7 +2,7 @@ import torch
 from torch.optim import Optimizer
 
 
-class TorchAdam(Optimizer):
+class AdamTorch(Optimizer):
 
     def __init__(
         self,
