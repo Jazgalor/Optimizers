@@ -2,7 +2,7 @@ import torch
 from torch.optim import Optimizer
 
 
-class TorchAdamax(Optimizer):
+class AdamaxTorch(Optimizer):
 
     def __init__(
         self,
