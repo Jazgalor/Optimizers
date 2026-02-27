@@ -43,6 +43,12 @@ class AdafactorTorch(Optimizer):
 
         for group in self.param_groups:
 
+            lr = group["lr"]
+            eps1 = group["eps1"]
+            eps2 = group["eps2"]
+            clip_threshold = group["clip_threshold"]
+            weight_decay = group["weight_decay"]
+
             for param in group["params"]:
 
                 if param.grad is None:
@@ -73,7 +79,7 @@ class AdafactorTorch(Optimizer):
 
                     r, c = state["r"], state["c"]
 
-                    grad_sq = grad.pow(2).add(group["eps1"])
+                    grad_sq = grad.pow(2).add(eps1)
 
                     r.mul_(beta2_t).add_(grad_sq.mean(dim=-1), alpha=1 - beta2_t)
 
@@ -85,34 +91,34 @@ class AdafactorTorch(Optimizer):
 
                     v = state["v"]
 
-                    grad_sq = grad.pow(2).add(group["eps1"])
+                    grad_sq = grad.pow(2).add(eps1)
 
                     v.mul_(beta2_t).add_(grad_sq,alpha=1 - beta2_t)
 
                     v_hat = v
 
-                update = grad / (v_hat.sqrt().add(group["eps1"]))
+                update = grad / (v_hat.sqrt().add(eps1))
 
                 # clipping
                 update_norm = torch.norm(update)
-                clip_denom = torch.clamp(update_norm / group["clip_threshold"],min=1.0)
+                clip_denom = torch.clamp(update_norm / clip_threshold,min=1.0)
                 update = update / clip_denom
 
                 # learning rate
                 if group["relative_step"]:
                     lr_t = min(1e-2, 1.0 / math.sqrt(t))
                 else:
-                    lr_t = group["lr"]
+                    lr_t = lr
 
                 if group["scale_parameter"]:
                     param_scale = torch.clamp(
                         param.norm(),
-                        min=group["eps2"]
+                        min=eps2
                     )
                     lr_t = lr_t * param_scale
 
-                if group["weight_decay"] != 0:
-                    param.add_(param, alpha=-group["weight_decay"])
+                if weight_decay != 0:
+                    param.add_(param, alpha=-weight_decay)
 
                 param.add_(update, alpha=-lr_t)
 
