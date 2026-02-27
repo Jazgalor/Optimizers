@@ -1,67 +1,103 @@
 import numpy as np
 
-
 class Adafactor:
 
     def __init__(
         self,
-        lr=1e-2,
-        beta2=0.999,
-        eps=1e-30
+        lr=None,
+        beta1=None,
+        eps1=1e-30,
+        eps2=1e-3,
+        clip_threshold=1.0,
+        beta2=-0.8,
+        weight_decay=0.0,
+        relative_step=True,
+        scale_parameter=True
     ):
-
         self.lr = lr
+        self.beta1 = beta1
+        self.eps1 = eps1
+        self.eps2 = eps2
+        self.clip_threshold = clip_threshold
         self.beta2 = beta2
-        self.eps = eps
+        self.weight_decay = weight_decay
+        self.relative_step = relative_step
+        self.scale_parameter = scale_parameter
 
         self.state = {}
+        self.t = 0
 
-    def init_state(self, param):
+    def _beta2_t(self):
+        return 1.0 - self.t ** self.beta2
 
-        shape = param.shape
+    def _get_lr(self, param):
+        if self.relative_step:
+            lr_t = min(1e-2, 1.0 / np.sqrt(self.t))
+        else:
+            lr_t = self.lr
 
-        if len(shape) != 2:
-            raise ValueError("Adafactor factorization requires 2D tensors")
+        if self.scale_parameter:
+            param_scale = max(self.eps2, np.linalg.norm(param))
+            lr_t *= param_scale
 
-        self.state[id(param)] = {
-            "row_avg": np.zeros(shape[0]),
-            "col_avg": np.zeros(shape[1]),
-            "step": 0
-        }
+        return lr_t
 
-    def compute_update(self, param, grad):
+    def compute_update(self, param, grad, state):
 
-        param_id = id(param)
+        beta2_t = self._beta2_t()
 
-        if param_id not in self.state:
-            self.init_state(param)
+        if grad.ndim >= 2:
+            if "r" not in state:
+                state["r"] = np.zeros(grad.shape[:-1])
+                state["c"] = np.zeros(grad.shape[-1])
 
-        state = self.state[param_id]
+            grad_sq = grad ** 2 + self.eps1
 
-        row_avg = state["row_avg"]
-        col_avg = state["col_avg"]
+            r = state["r"]
+            c = state["c"]
 
-        state["step"] += 1
+            r = beta2_t * r + (1 - beta2_t) * grad_sq.mean(axis=-1)
+            c = beta2_t * c + (1 - beta2_t) * grad_sq.mean(axis=0)
 
-        grad_sq = grad ** 2
+            v_hat = np.outer(r, c) / r.mean()
 
-        row_avg *= self.beta2
-        row_avg += (1 - self.beta2) * grad_sq.mean(axis=1)
+            state["r"], state["c"] = r, c
 
-        col_avg *= self.beta2
-        col_avg += (1 - self.beta2) * grad_sq.mean(axis=0)
+        else:
+            if "v" not in state:
+                state["v"] = np.zeros_like(param)
 
-        v_hat = np.outer(row_avg, col_avg)
-        v_hat /= row_avg.mean()
+            v = state["v"]
+            grad_sq = grad ** 2 + self.eps1
 
-        update = - self.lr * grad / (np.sqrt(v_hat) + self.eps)
+            v = beta2_t * v + (1 - beta2_t) * grad_sq
+            v_hat = v
 
-        return update
+            state["v"] = v
+
+        update = grad / (np.sqrt(v_hat) + self.eps1)
+
+        # clipping
+        update_norm = np.linalg.norm(update)
+        clip_denom = max(1.0, update_norm / self.clip_threshold)
+        update = update / clip_denom
+
+        lr_t = self._get_lr(param)
+
+        return lr_t * update
 
     def step(self, params, grads):
 
-        for param, grad in zip(params, grads):
+        self.t += 1
 
-            update = self.compute_update(param, grad)
+        for i, (param, grad) in enumerate(zip(params, grads)):
 
-            param += update
+            if i not in self.state:
+                self.state[i] = {}
+
+            update = self.compute_update(param, grad, self.state[i])
+
+            if self.weight_decay != 0:
+                param -= self.weight_decay * param
+
+            param -= update
