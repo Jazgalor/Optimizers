@@ -10,7 +10,13 @@ class AdaBeliefTorch(Optimizer):
         super().__init__(params, defaults)
 
     @torch.no_grad()
-    def step(self):
+    def step(self, closure=None):
+
+        loss = None
+
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
 
@@ -54,3 +60,5 @@ class AdaBeliefTorch(Optimizer):
 
                 # Update
                 param.addcdiv_(m_hat, update, value=-lr)
+                
+        return loss
