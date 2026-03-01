@@ -98,7 +98,7 @@ class LAMB(Optimizer):
                 update = r + weight_decay * param
 
                 w_norm = torch.norm(param)
-                u_norm = torch.norm(update)
+                u_norm = torch.norm(update) 
 
                 if w_norm > 0 and u_norm > 0:
                     trust_ratio = self.phi(w_norm) / u_norm
