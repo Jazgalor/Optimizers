@@ -19,7 +19,7 @@ CIFAR10_STD = (
 def get_cifar10_loaders(
     batch_size=128,
     validation_size=5000,
-    num_workers=8,
+    num_workers=4,
     seed=42,
     root="datasets",
 ):
