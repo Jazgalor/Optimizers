@@ -19,7 +19,7 @@ CIFAR10_STD = (
 def get_cifar10_loaders(
     batch_size=128,
     validation_size=5000,
-    num_workers=4,
+    num_workers=8,
     seed=42,
     root="datasets",
 ):
@@ -88,6 +88,7 @@ def get_cifar10_loaders(
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     validation_loader = DataLoader(
@@ -96,6 +97,7 @@ def get_cifar10_loaders(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     test_loader = DataLoader(
@@ -104,6 +106,7 @@ def get_cifar10_loaders(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     return (
