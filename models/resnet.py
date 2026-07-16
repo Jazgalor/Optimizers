@@ -93,8 +93,11 @@ class ResNet(nn.Module):
         block,
         layers,
         num_classes=10,
+        model_name="ResNet",
     ):
         super().__init__()
+        
+        self.model_name = model_name
 
         self.in_channels = 16
 
@@ -265,4 +268,5 @@ def ResNet20(
         block=BasicBlock,
         layers=[3, 3, 3],
         num_classes=num_classes,
+        model_name="ResNet20",
     )

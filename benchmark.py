@@ -204,7 +204,7 @@ def main():
     )
 
     experiment_name = (
-        f"{model.__class__.__name__}"
+        f"{model.model_name}"
         f"_{optimizer.__class__.__name__}"
     )
 
