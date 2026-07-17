@@ -268,7 +268,7 @@ def ResNet20(
         block=BasicBlock,
         layers=[3, 3, 3],
         num_classes=num_classes,
-        model_name="ResNet20",
+        model_name="ResNet-20",
     )
 
 def ResNet110(
@@ -279,5 +279,5 @@ def ResNet110(
         block=BasicBlock,
         layers=[18, 18, 18],
         num_classes=num_classes,
-        model_name="ResNet110",
+        model_name="ResNet-110",
     )
