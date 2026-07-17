@@ -5,8 +5,10 @@ import torch
 import torch.nn as nn
 
 from models.resnet import ResNet20
+from models.resnet import ResNet110
+from models.wrn import WRN2810
 
-from opt_torch.sgd  import SGDTorch
+from optimizers.torch.sgd  import SGDTorch
 
 from data.cifar10 import get_cifar10_loaders
 
