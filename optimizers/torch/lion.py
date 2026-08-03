@@ -45,16 +45,13 @@ class LionTorch(torch.optim.Optimizer):
 
                 # evolved sign direction
                 blended = beta1 * m + (1 - beta1) * grad
-                update = blended.sign()
 
-                # weight decay
-                if weight_decay != 0:
-                    update = update + weight_decay * param
+                # parameter update
+                update = blended.sign() + weight_decay * param
+
+                param.add_(update, alpha=-lr)
 
                 # momentum update
                 m.mul_(beta2).add_(grad, alpha=1 - beta2)
-
-                # parameter update
-                param.add_(update, alpha=-lr)
 
         return loss

@@ -18,7 +18,8 @@ class ASAMTorch(torch.optim.Optimizer):
         assert closure is not None, "ASAM requires closure"
 
         # 1. first forward-backward
-        loss = closure()
+        with torch.enable_grad():
+            loss = closure()
 
         # 2. compute ||T_w g||
         norm_sq = 0.0
@@ -36,36 +37,34 @@ class ASAMTorch(torch.optim.Optimizer):
         norm = torch.clamp(norm, min=self.eps)
 
         # 3. perturb parameters
-        eps_list = []
 
         for group in self.param_groups:
             for param in group["params"]:
 
                 if param.grad is None:
-                    eps_list.append(None)
                     continue
 
                 perturbation = (param.abs() ** 2) * param.grad
 
                 eps = self.rho * perturbation / norm
 
+                self.state[param]["eps"] = eps
+
                 param.add_(eps)
-                eps_list.append(eps)
 
         # 4. second forward-backward
-        closure()
+        with torch.enable_grad():
+            loss = closure()
 
         # 5. restore parameters
-        idx = 0
 
         for group in self.param_groups:
             for param in group["params"]:
 
-                eps = eps_list[idx]
-                idx += 1
+                if param.grad is None:
+                    continue
 
-                if eps is not None:
-                    param.sub_(eps)
+                param.sub_(self.state[param]["eps"])
 
         # 6. update using base optimizer
         self.optimizer.step()

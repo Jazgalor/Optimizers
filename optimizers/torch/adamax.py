@@ -7,7 +7,7 @@ class AdamaxTorch(Optimizer):
     def __init__(
         self,
         params,
-        lr=1e-3,
+        lr=2e-3,
         beta1=0.9,
         beta2=0.999,
         eps=1e-8

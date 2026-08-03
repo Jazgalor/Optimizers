@@ -15,11 +15,30 @@ class SGDNesterovTorch(torch.optim.Optimizer):
 
         loss = None
 
-        if closure is not None:
-            with torch.enable_grad():
-                loss = closure()
+        if closure is None:
+            raise RuntimeError("SGDNesterovTorch requires a closure.")
+        
+        for group in self.param_groups:
 
-        for group in self.param_groups():
+            beta = group["beta"]
+
+            for param in group["params"]:
+
+                state = self.state[param]
+
+                if len(state) == 0:
+
+                    state["step"] = 0
+                    state["m"] = ( torch.zeros_like(param) )
+
+                m = state["m"]
+                param.add_(m, alpha=beta)
+
+        with torch.enable_grad():
+
+            loss = closure()        
+
+        for group in self.param_groups:
 
             lr = group["lr"]
             beta = group["beta"]
@@ -33,20 +52,15 @@ class SGDNesterovTorch(torch.optim.Optimizer):
 
                 state = self.state[param]
 
-                if len(state) == 0:
-
-                    state["step"] = 0
-                    state["m"] = torch.zeros_like(param)
-
                 state["step"] += 1
 
                 m = state["m"]
 
-                # m = beta * m + grad
-                m.mul_(beta).add_(grad)
+                # m = beta * m + grad * -lr
+                m.mul_(beta).add_(grad, alpha=-lr)
 
-                # update = grad + beta * m
-                update = grad.add(m, alpha=beta)
+                # update = grad
+                update = grad
 
                 param.add_(update, alpha=-lr)
 

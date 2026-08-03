@@ -8,7 +8,7 @@ class LAMB(Optimizer):
         self,
         params,
         lr=1e-3,
-        total_steps=10000,
+        total_steps=78200,
         beta1=0.9,
         beta2=0.999,
         eps=1e-6,
@@ -57,7 +57,7 @@ class LAMB(Optimizer):
 
         for group in self.param_groups:
 
-            lr_t = self._get_lr(group)
+            lr_t = group["lr"]
 
             beta1 = group["beta1"]
             beta2 = group["beta2"]
@@ -101,7 +101,7 @@ class LAMB(Optimizer):
                 u_norm = torch.norm(update) 
 
                 if w_norm > 0 and u_norm > 0:
-                    trust_ratio = self.phi(w_norm) / u_norm
+                    trust_ratio = self.phi(w_norm) / (u_norm + eps)
                 else:
                     trust_ratio = 1.0
 

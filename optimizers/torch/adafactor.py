@@ -1,6 +1,5 @@
 import torch
 from torch.optim import Optimizer
-import math
 
 
 class AdafactorTorch(Optimizer):
@@ -8,118 +7,245 @@ class AdafactorTorch(Optimizer):
     def __init__(
         self,
         params,
-        lr=None,
-        beta1=None,
         eps1=1e-30,
         eps2=1e-3,
-        clip_threshold=1.0,
-        beta2=-0.8,
-        weight_decay=0.0,
-        relative_step=True,
-        scale_parameter=True
+        d=1.0,
+        beta2_decay=-0.8,
     ):
 
         defaults = dict(
-            lr=lr,
-            beta1=beta1,
             eps1=eps1,
             eps2=eps2,
-            clip_threshold=clip_threshold,
-            beta2=beta2,
-            weight_decay=weight_decay,
-            relative_step=relative_step,
-            scale_parameter=scale_parameter
+            d=d,
+            beta2_decay=beta2_decay,
         )
 
-        super().__init__(params, defaults)
+        super().__init__(
+            params,
+            defaults,
+        )
+
 
     @torch.no_grad()
     def step(self, closure=None):
 
         loss = None
+
         if closure is not None:
+
             with torch.enable_grad():
                 loss = closure()
 
+
         for group in self.param_groups:
 
-            lr = group["lr"]
             eps1 = group["eps1"]
             eps2 = group["eps2"]
-            clip_threshold = group["clip_threshold"]
-            weight_decay = group["weight_decay"]
+            d = group["d"]
+            beta2_decay = group["beta2_decay"]
+
 
             for param in group["params"]:
 
                 if param.grad is None:
                     continue
 
+
                 grad = param.grad
+
                 state = self.state[param]
 
+
+                # ==========================================
+                # INITIALIZATION
+                # ==========================================
+
                 if len(state) == 0:
+
                     state["step"] = 0
 
-                    if grad.ndim >= 2:
-                        state["r"] = torch.zeros(
-                            grad.shape[:-1], device=param.device
-                        )
-                        state["c"] = torch.zeros(
-                            grad.shape[-1], device=param.device
-                        )
+
+                    if grad.ndim > 1:
+
+                        # Factorization over
+                        # the last two dimensions
+
+                        row_shape = list(grad.shape)
+
+                        row_shape[-1] = 1
+
+
+                        col_shape = list(grad.shape)
+
+                        col_shape[-2] = 1
+
+
+                        state["row_var"] = (torch.zeros( row_shape, device=param.device, dtype=param.dtype,))
+
+                        state["col_var"] = (torch.zeros(col_shape, device=param.device, dtype=param.dtype,))
+
+
                     else:
-                        state["v"] = torch.zeros_like(param)
+
+                        state["variance"] = (torch.zeros_like(param))
+
+
+                # ==========================================
+                # STEP
+                # ==========================================
 
                 state["step"] += 1
+
                 t = state["step"]
 
-                beta2_t = 1.0 - t ** group["beta2"]
 
-                if grad.ndim >= 2:
+                # ==========================================
+                # BETA2
+                # ==========================================
 
-                    r, c = state["r"], state["c"]
+                # beta2_t = 1 - t^(-0.8)
 
-                    grad_sq = grad.pow(2).add(eps1)
+                one_minus_beta2_t = (t ** beta2_decay)
 
-                    r.mul_(beta2_t).add_(grad_sq.mean(dim=-1), alpha=1 - beta2_t)
 
-                    c.mul_(beta2_t).add_(grad_sq.mean(dim=0), alpha=1 - beta2_t)
+                beta2_t = (1.0 - one_minus_beta2_t)
 
-                    v_hat = torch.outer(r, c) / r.mean()
+
+                # ==========================================
+                # RELATIVE STEP SIZE
+                # ==========================================
+
+                # rho_t = min(10^-2, 1/sqrt(t))
+
+                rho_t = min(1e-2, 1.0 / t ** (0.5), )
+
+
+                # ==========================================
+                # PARAMETER SCALE
+                # ==========================================
+
+                # RMS(X)
+
+                param_rms = (param.norm() / (param.numel() ** 0.5))
+
+
+                # alpha_t =
+                # max(eps2, RMS(X)) * rho_t
+
+                alpha_t = (max(eps2, param_rms.item(),) * rho_t)
+
+
+                # ==========================================
+                # MATRIX / MULTI-DIMENSIONAL PARAMETERS
+                # ==========================================
+
+                if grad.ndim > 1:
+
+                    row_var = state["row_var"]
+
+                    col_var = state["col_var"]
+
+
+                    # ======================================
+                    # G^2 + eps1
+                    # ======================================
+
+                    grad_squared = (grad * grad + eps1)
+
+
+                    # ======================================
+                    # R_t
+                    # ======================================
+
+                    row_mean = (grad_squared.mean(dim=-1, keepdim=True, ))
+
+
+                    row_var.mul_(beta2_t)
+
+                    row_var.add_(row_mean, alpha=one_minus_beta2_t, )
+
+
+                    # ======================================
+                    # C_t
+                    # ======================================
+
+                    col_mean = (grad_squared.mean(dim=-2, keepdim=True,))
+
+
+                    col_var.mul_(beta2_t)
+
+                    col_var.add_(col_mean, alpha=one_minus_beta2_t,)
+
+
+                    # ======================================
+                    # V_hat_t
+                    # ======================================
+
+                    variance = (row_var @ col_var)
+
+
+                    row_mean_value = (row_var.mean(dim=-2, keepdim=True,))
+
+
+                    variance.div_(row_mean_value)
+
+
+                # ==========================================
+                # VECTOR PARAMETERS
+                # ==========================================
 
                 else:
 
-                    v = state["v"]
+                    variance = state["variance"]
 
-                    grad_sq = grad.pow(2).add(eps1)
 
-                    v.mul_(beta2_t).add_(grad_sq,alpha=1 - beta2_t)
+                    grad_squared = (grad * grad + eps1)
 
-                    v_hat = v
 
-                update = grad / (v_hat.sqrt().add(eps1))
+                    # V_hat_t =
+                    # beta2_t * V_hat_(t-1)
+                    # +
+                    # (1 - beta2_t) * G_t^2
 
-                # clipping
-                update_norm = torch.norm(update)
-                clip_denom = torch.clamp(update_norm / clip_threshold,min=1.0)
-                update = update / clip_denom
+                    variance.mul_(beta2_t)
 
-                # learning rate
-                if group["relative_step"]:
-                    lr_t = min(1e-2, 1.0 / math.sqrt(t))
-                else:
-                    lr_t = lr
+                    variance.add_(grad_squared, alpha=one_minus_beta2_t,)
 
-                if group["scale_parameter"]:
-                    param_scale = torch.clamp(
-                        param.norm(),
-                        min=eps2
-                    )
-                    lr_t = lr_t * param_scale
 
-                if weight_decay != 0:
-                    param.add_(param, alpha=-weight_decay)
+                # ==========================================
+                # U_t
+                # ==========================================
 
-                param.add_(update, alpha=-lr_t)
+                update = (grad / variance.sqrt())
+
+
+                # ==========================================
+                # CLIPPING
+                # ==========================================
+
+                # RMS(U_t)
+
+                update_rms = (update.norm() / (update.numel() ** 0.5))
+
+
+                # U_hat_t =
+                # U_t /
+                # max(1, RMS(U_t) / d)
+
+                clip_denom = max(1.0, update_rms.item() / d,)
+
+
+                update.div_(clip_denom)
+
+
+                # ==========================================
+                # PARAMETER UPDATE
+                # ==========================================
+
+                # X_t =
+                # X_(t-1) - alpha_t * U_hat_t
+
+                param.add_(update, alpha=-alpha_t, )
+
 
         return loss

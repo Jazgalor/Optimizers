@@ -1,5 +1,7 @@
 import time
 
+import torch
+
 
 def train_epoch_closure(
     model,
@@ -35,24 +37,39 @@ def train_epoch_closure(
             "outputs": None,
         }
 
-        def closure():
+        
+        def closure(mode="train"):
 
-            optimizer.zero_grad(
-                set_to_none=True,
-            )
+            optimizer.zero_grad(set_to_none=True)
 
             outputs = model(images)
 
-            loss = criterion(
-                outputs,
-                labels,
-            )
+            if mode == "train":
+
+                loss = criterion(outputs, labels)
+
+            elif mode == "gnb":
+
+                probs = torch.softmax(outputs, dim=1)
+
+                sampled_labels = torch.multinomial(
+                    probs,
+                    num_samples=1
+                ).squeeze(1)
+
+                loss = criterion(
+                    outputs,
+                    sampled_labels
+                )
+
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
 
             loss.backward()
 
             closure_data["loss"] = loss.detach()
-
             closure_data["outputs"] = outputs.detach()
+            closure_data["batch_size"] = images.size(0)
 
             return loss
 

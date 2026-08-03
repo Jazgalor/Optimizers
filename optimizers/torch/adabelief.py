@@ -50,11 +50,11 @@ class AdaBeliefTorch(Optimizer):
 
                 # Belief variance
                 diff = grad - m
-                s.mul_(beta2).addcmul_(diff, diff, value=1 - beta2)
+                s.mul_(beta2).addcmul_(diff, diff, value=1 - beta2).add_(eps)
 
                 # Bias correction
-                m_hat = m / (1 - beta1 ** t)
-                s_hat = s / (1 - beta2 ** t)
+                m_hat = torch.div(m, (1 - beta1 ** t))
+                s_hat = torch.div(s, (1 - beta2 ** t))
 
                 update = s_hat.sqrt().add_(eps)
 

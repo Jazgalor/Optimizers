@@ -57,22 +57,19 @@ class AMSGradTorch(Optimizer):
                 m = state["m"]
                 v = state["v"]
                 v_hat_max = state["v_hat_max"]
+                beta_t = beta1 / t
 
                 # first moment
-                m.mul_(beta1).add_(grad, alpha=1 - beta1)
+                m.mul_(beta_t).add_(grad, alpha=1 - (beta_t))
 
                 # second moment
                 v.mul_(beta2).addcmul_(grad,grad,value=1 - beta2)
 
-                # bias correction
-                m_hat = m / (1 - beta1 ** t)
-                v_hat = v / (1 - beta2 ** t)
-
                 # AMSGrad max trick
-                torch.maximum(v_hat_max, v_hat, out=v_hat_max)
+                torch.maximum(v_hat_max, v, out=v_hat_max)
 
                 update = v_hat_max.sqrt().add_(eps)
 
-                param.addcdiv_(m_hat, update, value=-lr)
+                param.addcdiv_(m, update, value=-lr / (t ** 0.5))
 
         return loss

@@ -70,8 +70,8 @@ class AdamTorch(Optimizer):
                 bias_correction1 = 1 - beta1 ** step
                 bias_correction2 = 1 - beta2 ** step
 
-                exp_avg_hat = exp_avg / bias_correction1
-                exp_avg_sq_hat = exp_avg_sq / bias_correction2
+                exp_avg_hat = torch.div(exp_avg, bias_correction1)
+                exp_avg_sq_hat = torch.div(exp_avg_sq, bias_correction2)
 
                 # update
                 update = exp_avg_sq_hat.sqrt().add_(eps)

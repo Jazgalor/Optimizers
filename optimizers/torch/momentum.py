@@ -41,11 +41,11 @@ class SGDMomentumTorch(torch.optim.Optimizer):
 
                 m = state["m"]
 
-                # m = beta * m + grad
-                m.mul_(beta).add_(grad)
+                # m = beta * m + grad * -lr
+                m.mul_(beta).add_(grad, alpha=-lr)
 
                 update = m
 
-                param.add_(update, alpha=-lr)
+                param.add_(update)
 
         return loss

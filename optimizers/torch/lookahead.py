@@ -18,7 +18,7 @@ class LookaheadTorch(Optimizer):
 
         for group in self.param_groups:
             for p in group["params"]:
-                self.state[p]["slow_param"] = p.clone().detach()
+                self.state[p]["slow_param"] = p.detach().clone()
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -35,9 +35,6 @@ class LookaheadTorch(Optimizer):
             lr = group["lr"]
 
             for param in group["params"]:
-
-                if param.grad is None:
-                    continue
 
                 state = self.state[param]
 

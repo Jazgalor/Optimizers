@@ -1,23 +1,32 @@
 import torch
+from torch.optim import Optimizer
 
 
-class Ranger21Torch(torch.optim.Optimizer):
+class Ranger21Torch(Optimizer):
 
-    def __init__(self,
-                 params,
-                 lr=1e-3,
-                 weight_decay=1e-4,
-                 beta0=0.9,
-                 beta1=0.9,
-                 beta2=0.999,
-                 beta_lookahead=0.5,
-                 eps=1e-8,
-                 eps_clipping=1e-3,
-                 tau_clipping=1e-2,
-                 k_lookahead=5,
-                 t_max=1000,
-                 t_warmup=0,
-                 t_warmdown=0):
+    def __init__(
+        self,
+        params,
+        lr=1e-3,
+        weight_decay=1e-4,
+        beta0=0.9,
+        beta1=0.9,
+        beta2=0.999,
+        beta_lookahead=0.5,
+        eps=1e-8,
+        eps_clipping=1e-3,
+        tau_clipping=1e-2,
+        k_lookahead=5,
+        t_max=70400,
+        t_warmup=None,
+        t_warmdown=None,
+    ):
+
+        if t_warmup is None:
+            t_warmup = int(0.22 * t_max)
+
+        if t_warmdown is None:
+            t_warmdown = int(0.28 * t_max)
 
         defaults = dict(
             lr=lr,
@@ -32,15 +41,85 @@ class Ranger21Torch(torch.optim.Optimizer):
             k_lookahead=k_lookahead,
             t_max=t_max,
             t_warmup=t_warmup,
-            t_warmdown=t_warmdown
+            t_warmdown=t_warmdown,
         )
 
         super().__init__(params, defaults)
+
+    @staticmethod
+    def adaptive_gradient_clipping(
+        grad,
+        param,
+        tau,
+        eps,
+    ):
+
+        if grad.ndim <= 1:
+            return grad
+
+        if grad.ndim == 2:
+
+            reduce_dims = 1
+
+        elif grad.ndim == 4:
+
+            reduce_dims = (1, 2, 3)
+
+        else:
+
+            return grad
+
+        param_norm = torch.norm(
+            param,
+            dim=reduce_dims,
+            keepdim=True,
+        )
+
+        grad_norm = torch.norm(
+            grad,
+            dim=reduce_dims,
+            keepdim=True,
+        )
+
+        max_norm = torch.maximum(
+            param_norm,
+            torch.full_like(param_norm, eps),
+        )
+
+        scale = tau * max_norm / (grad_norm + 1e-8)
+
+        grad = torch.where(
+            grad_norm > tau * max_norm,
+            grad * scale,
+            grad,
+        )
+
+        return grad
+
+    @staticmethod
+    def gradient_centralization(grad):
+
+        if grad.ndim == 2:
+
+            grad = grad - grad.mean(
+                dim=1,
+                keepdim=True,
+            )
+
+        elif grad.ndim == 4:
+
+            grad = grad - grad.mean(
+                dim=(1, 2, 3),
+                keepdim=True,
+            )
+
+        return grad
 
     @torch.no_grad()
     def step(self, closure=None):
 
         loss = None
+
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
@@ -57,83 +136,84 @@ class Ranger21Torch(torch.optim.Optimizer):
             eps_c = group["eps_clipping"]
             tau = group["tau_clipping"]
             k = group["k_lookahead"]
+            t_max = group["t_max"]
+            t_warmup = group["t_warmup"]
+            t_warmdown = group["t_warmdown"]
 
-            for p in group["params"]:
+            for param in group["params"]:
 
-                if p.grad is None:
+                if param.grad is None:
                     continue
 
-                state = self.state[p]
+                state = self.state[param]
 
                 if len(state) == 0:
+
                     state["step"] = 0
-                    state["m"] = torch.zeros_like(p)
-                    state["m_prev"] = torch.zeros_like(p)
-                    state["m_prev2"] = torch.zeros_like(p)
-                    state["v"] = torch.zeros_like(p)
-                    state["v_max"] = torch.zeros_like(p)
-                    state["slow"] = p.clone().detach()
+
+                    state["m_prev"] = torch.zeros_like(param)
+                    state["m_prev2"] = torch.zeros_like(param)
+
+                    state["v"] = torch.zeros_like(param)
+                    state["v_max"] = torch.zeros_like(param)
+
+                    state["slow"] = param.clone().detach()
 
                 state["step"] += 1
                 t = state["step"]
 
-                g = p.grad
+                grad = param.grad
 
-                # ---------------- AGC ----------------
-                p_norm = p.norm()
-                g_norm = g.norm()
+                grad = self.adaptive_gradient_clipping(grad, param, tau, eps_c, )
 
-                if g_norm / (p_norm.clamp_min(eps_c)) > tau:
-                    g = g * (tau * p_norm.clamp_min(eps_c) / (g_norm + 1e-12))
+                grad = self.gradient_centralization(grad)
 
-                # ---------------- GC ----------------
-                g = g - g.mean()
-
-                # ---------------- Momentum ----------------
                 m_prev = state["m_prev"]
                 m_prev2 = state["m_prev2"]
 
-                m_new = (beta1**2) * m_prev2 + (1 - beta1**2) * g
+                m = m_prev2.mul(beta1**2).add(grad, alpha=1 - beta1**2)
+                bias_correction = 1 / (1 - beta1**t)
+                m_hat = m.mul(1 + beta0).add(m_prev, alpha= -beta0).mul(bias_correction)
 
-                m_hat = ((1 + beta0) * m_new - beta0 * m_prev) / (1 - beta1**t)
+                state["m_prev2"].copy_(m_prev)
+                state["m_prev"].copy_(m)
 
-                state["m_prev2"] = m_prev.clone()
-                state["m_prev"] = state["m"].clone()
-                state["m"] = m_new.clone()
+                v = state["v"]
+                v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-                # ---------------- Variance ----------------
-                v_new = beta2 * state["v"] + (1 - beta2) * (g ** 2)
-                v_max = torch.maximum(state["v_max"], v_new)
+                v_max = torch.maximum(state["v_max"], v)
 
-                v_hat = v_max / (1 - beta2**t)
+                v_hat = torch.div(v_max,  (1 - beta2**t))
 
-                state["v"] = v_new
-                state["v_max"] = v_max
+                state["v"].copy_(v)
+                state["v_max"].copy_(v_max)
 
-                denom_scale = torch.sqrt((1 + beta0)**2 + beta0**2)
+                denom = (((1 + beta0)**2 + beta0**2) ** 0.5)
 
-                update = m_hat / (denom_scale * (torch.sqrt(v_hat) + eps))
+                u = torch.div(m_hat, (denom * (v_hat.sqrt() + eps)))
 
-                # ---------------- LR schedule ----------------
-                warmup = t / max(1, group["t_warmup"])
-                cooldown = (group["t_max"] - t) / max(1, group["t_warmdown"])
-                explore = (1 - beta2) * t / 2
+                warmup = max(((1-beta2)/2) * t, t / max(1, t_warmup))
 
-                scale = min(1.0, max(warmup, explore), cooldown)
-                lr_t = scale * lr
+                warmdown = (t_max - t) / max(1, t_warmdown)
 
-                # ---------------- WD ----------------
-                decay = wd * (1 - 1 / (p.norm() + eps))
-                decay_term = (lr_t / (torch.mean(v_hat).sqrt() + eps)) * decay * p
+                schedule = min(1.0, warmup, warmdown)
 
-                # ---------------- Update ----------------
-                p.add_(update * lr_t + decay_term * lr_t)
+                lr_t = lr * schedule
 
-                # ---------------- Lookahead ----------------
+                variance = torch.sqrt(v_hat.mean()) + eps
+
+                correction = 1.0 - 1.0 / (torch.norm(param)+ eps)
+
+                decay = torch.div(lr_t, variance).mul(wd * correction).mul(param)
+
+                param.add_(u, alpha=-lr_t,)
+
+                param.add_(decay, alpha=-lr_t,)
+
                 if t % k == 0:
                     slow = state["slow"]
-                    slow.mul_(beta_l).add_(p, alpha=(1 - beta_l))
-                    p.copy_(slow)
+                    slow.mul_(beta_l)
+                    slow.add_(param, alpha=1 - beta_l,)
+                    param.copy_(slow)
 
-                
         return loss

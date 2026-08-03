@@ -8,7 +8,12 @@ from models.resnet import ResNet20
 from models.resnet import ResNet110
 from models.wrn import WRN2810
 
-from optimizers.torch.sgd  import SGDTorch
+from optimizers.torch.adadelta import AdadeltaTorch
+from optimizers.torch.adam import AdamTorch
+from optimizers.torch.adamax import AdamaxTorch
+from optimizers.torch.nadam import NadamTorch
+from optimizers.torch.sgd import SGDTorch
+from torch.optim.sgd import SGD
 
 from data.cifar10 import get_cifar10_loaders
 
@@ -57,9 +62,19 @@ def main():
     # OPTIMIZER
     # ================================================
 
-    optimizer = SGDTorch(
+    # Optimizer implementation
+
+    # optimizer = AdamWTorch(
+    #     model.parameters(), weight_decay=0.05*(BATCH_SIZE/(45000*200))**0.5
+    # )
+
+    optimizer = AdadeltaTorch(
         model.parameters()
     )
+
+    # Torch optimizer
+
+    # optimizer = SGD(model.parameters())
 
     # ================================================
     # LOSS FUNCTION
@@ -90,9 +105,11 @@ def main():
         seed=SEED,
     )
 
+
     # ================================================
     # CLOSURE
     # ================================================
+
 
     closure = None
 
@@ -133,7 +150,6 @@ def main():
                 train_loader=train_loader,
                 criterion=criterion,
                 optimizer=optimizer,
-                closure=closure,
                 device=DEVICE,
             )
 
@@ -195,6 +211,7 @@ def main():
 
     statistics.test_loss = test_loss
     statistics.test_accuracy = test_accuracy
+
 
     # ================================================
     # SAVE

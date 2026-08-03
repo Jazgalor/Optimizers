@@ -6,7 +6,7 @@ class AdanTorch(Optimizer):
 
     def __init__(self,
                  params,
-                 lr=1e-3,
+                 lr=1e-2,
                  beta1=0.02,
                  beta2=0.08,
                  beta3=0.01,
@@ -52,10 +52,10 @@ class AdanTorch(Optimizer):
 
                 if len(state) == 0:
 
-                    state['m'] = torch.zeros_like(param)
+                    state['m'] = grad.clone()
                     state['v'] = torch.zeros_like(param)
-                    state['n'] = torch.zeros_like(param)
-                    state['prev_grad'] = torch.zeros_like(param)
+                    state['n'] = grad.pow(2)
+                    state['prev_grad'] = grad.clone()   
 
                 m = state['m']
                 v = state['v']
@@ -80,9 +80,8 @@ class AdanTorch(Optimizer):
 
                 update = eta_t * (m + (1 - beta2) * v)
 
-                shrink = 1.0 / (1.0 + weight_decay * lr)
-
-                param.mul_(shrink).add_(-update)
+                param.sub_(update)
+                param.div_(1.0 + weight_decay * lr)
 
                 prev_grad.copy_(grad)
         

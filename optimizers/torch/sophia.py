@@ -15,6 +15,7 @@ class SophiaTorch(torch.optim.Optimizer):
         weight_decay=0.1,
         eps=1e-15,
         k=10,
+        batch_size=128,
     ):
 
         defaults = dict(
@@ -25,6 +26,7 @@ class SophiaTorch(torch.optim.Optimizer):
             weight_decay=weight_decay,
             eps=eps,
             k=k,
+            batch_size=batch_size,
         )
 
         super().__init__(
@@ -36,11 +38,10 @@ class SophiaTorch(torch.optim.Optimizer):
 
 
     @torch.no_grad()
-    def update_hessian(self):
-        """
-        EMA Hessian estimator:
-        h_t = beta2 * h_(t-1) + (1-beta2) * g_t^2
-        """
+    def update_hessian(self, closure):
+
+        with torch.enable_grad():
+            closure("gnb")
 
         for group in self.param_groups:
 
@@ -51,39 +52,45 @@ class SophiaTorch(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
 
-
                 state = self.state[p]
-
 
                 if len(state) == 0:
 
                     state["m"] = torch.zeros_like(p)
                     state["h"] = torch.zeros_like(p)
 
-
                 h = state["h"]
 
+                batch_size = group["batch_size"]
 
                 h.mul_(beta2).addcmul_(
                     p.grad,
                     p.grad,
-                    value=1 - beta2
+                    value=(1 - beta2) * batch_size
                 )
 
 
     @torch.no_grad()
     def step(self, closure=None):
 
-        loss = None
+        assert closure is not None, "Sophia requires closure"
 
 
         # ---------------- closure ----------------
 
-        if closure is not None:
+        with torch.enable_grad():
+            loss = closure()
+            
 
-            with torch.enable_grad():
 
-                loss = closure()
+        # ---------------- gradient ----------------
+        saved_grad = {}
+
+        for group in self.param_groups:
+            for p in group["params"]:
+
+                if p.grad is not None:
+                    saved_grad[p] = p.grad.clone()
 
 
 
@@ -94,11 +101,14 @@ class SophiaTorch(torch.optim.Optimizer):
 
         # ---------------- Hessian update every k steps ----------------
 
-        k = self.defaults["k"]
+        k = group["k"]
 
         if self.step_count % k == 1:
 
-            self.update_hessian()
+            self.update_hessian(closure)
+
+            for p, grad in saved_grad.items():
+                p.grad.copy_(grad)
 
 
 
@@ -134,10 +144,7 @@ class SophiaTorch(torch.optim.Optimizer):
 
                 # ---------------- first moment ----------------
 
-                m.mul_(beta1).add_(
-                    p.grad,
-                    alpha=1 - beta1
-                )
+                m.mul_(beta1).add_(p.grad, alpha=1-beta1)
 
 
 
@@ -145,18 +152,13 @@ class SophiaTorch(torch.optim.Optimizer):
 
                 denom = torch.maximum(
                     gamma * h,
-                    torch.full_like(
-                        h,
-                        eps
-                    )
+                    torch.full_like(h, eps)
                 )
-
 
                 ratio = torch.minimum(
                     m.abs() / denom,
                     torch.ones_like(m)
                 )
-
 
                 update = m.sign() * ratio
 
@@ -164,18 +166,13 @@ class SophiaTorch(torch.optim.Optimizer):
 
                 # ---------------- weight decay ----------------
 
-                p.mul_(
-                    1 - lr * weight_decay
-                )
+                p.mul_(1 - lr * weight_decay)
 
 
 
                 # ---------------- parameter update ----------------
 
-                p.add_(
-                    update,
-                    alpha=-lr
-                )
+                p.add_(update, alpha=-lr)
 
 
 
