@@ -8,10 +8,8 @@ from models.resnet import ResNet20
 from models.resnet import ResNet110
 from models.wrn import WRN2810
 
-from optimizers.torch.adadelta import AdadeltaTorch
-from optimizers.torch.adam import AdamTorch
-from optimizers.torch.adamax import AdamaxTorch
-from optimizers.torch.nadam import NadamTorch
+from optimizers.torch.lion import LionTorch #20
+
 from optimizers.torch.sgd import SGDTorch
 from torch.optim.sgd import SGD
 
@@ -59,6 +57,24 @@ def main():
     model = ResNet20().to(DEVICE)
 
     # ================================================
+    # MODEL Parameters
+    # ================================================
+    # num_tensors = sum(
+    #     1
+    #     for p in model.parameters()
+    #     if p.requires_grad
+    # )
+
+    # num_parameters = sum(
+    #     p.numel()
+    #     for p in model.parameters()
+    #     if p.requires_grad
+    # )
+
+    # print("tensors:", num_tensors)
+    # print("parameters:", num_parameters)
+
+    # ================================================
     # OPTIMIZER
     # ================================================
 
@@ -68,9 +84,18 @@ def main():
     #     model.parameters(), weight_decay=0.05*(BATCH_SIZE/(45000*200))**0.5
     # )
 
-    optimizer = AdadeltaTorch(
+    # Optimizer for other that require base optimizer to work
+    # base_optimizer = SGDTorch(model.parameters())
+
+    # optimizer = LookaheadTorch(
+    #     base_optimizer
+    # )
+
+    optimizer = LionTorch(
         model.parameters()
     )
+
+    
 
     # Torch optimizer
 
@@ -111,7 +136,7 @@ def main():
     # ================================================
 
 
-    closure = None
+    closure = True
 
     # ================================================
     # TRAINING

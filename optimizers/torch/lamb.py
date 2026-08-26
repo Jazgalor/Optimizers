@@ -57,7 +57,7 @@ class LAMB(Optimizer):
 
         for group in self.param_groups:
 
-            lr_t = group["lr"]
+            lr_t = self._get_lr(group)
 
             beta1 = group["beta1"]
             beta2 = group["beta2"]
@@ -88,22 +88,19 @@ class LAMB(Optimizer):
                 v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
                 # Bias correction
-                m_hat = m / (1 - beta1 ** t)
-                v_hat = v / (1 - beta2 ** t)
+                m_hat = torch.div(m, (1 - beta1 ** t))
+                v_hat = torch.div(v, (1 - beta2 ** t))
 
                 # Adam ratio
-                r = m_hat / (v_hat.sqrt().add(eps))
+                r = torch.div(m_hat, (v_hat.sqrt().add(eps)))
 
                 # Add weight decay inside trust ratio
-                update = r + weight_decay * param
+                update = r.add(param, alpha=weight_decay)
 
                 w_norm = torch.norm(param)
                 u_norm = torch.norm(update) 
 
-                if w_norm > 0 and u_norm > 0:
-                    trust_ratio = self.phi(w_norm) / (u_norm + eps)
-                else:
-                    trust_ratio = 1.0
+                trust_ratio = (self.phi(w_norm) / torch.clamp(u_norm, min=eps))
 
                 param.add_(update, alpha=-lr_t * trust_ratio)
 

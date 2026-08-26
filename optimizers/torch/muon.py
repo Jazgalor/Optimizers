@@ -7,7 +7,7 @@ class MuonTorch(torch.optim.Optimizer):
         self,
         params,
         lr=0.02,
-        momentum=0.95,
+        beta=0.95,
         weight_decay=0.0,
         ns_steps=5,
         eps=1e-7,
@@ -15,7 +15,7 @@ class MuonTorch(torch.optim.Optimizer):
 
         defaults = dict(
             lr=lr,
-            momentum=momentum,
+            beta=beta,
             weight_decay=weight_decay,
             ns_steps=ns_steps,
             eps=eps,
@@ -67,7 +67,7 @@ class MuonTorch(torch.optim.Optimizer):
         for group in self.param_groups:
 
             lr = group["lr"]
-            momentum = group["momentum"]
+            beta = group["beta"]
             weight_decay = group["weight_decay"]
             ns_steps = group["ns_steps"]
             eps = group["eps"]
@@ -89,7 +89,7 @@ class MuonTorch(torch.optim.Optimizer):
 
                 # ---------------- Momentum ----------------
 
-                m.mul_(momentum)
+                m.mul_(beta)
                 m.add_(grad)
 
                 # ---------------- Orthogonalization ----------------

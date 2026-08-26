@@ -32,7 +32,7 @@ class LookaheadTorch(Optimizer):
 
         for group in self.param_groups:
 
-            lr = group["lr"]
+            lr = self.lr
 
             for param in group["params"]:
 

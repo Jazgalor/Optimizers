@@ -72,13 +72,13 @@ class AdanTorch(Optimizer):
                 v.mul_(1 - beta2).add_(diff, alpha=beta2)
 
                 # n_t
-                combined = grad + (1 - beta2) * diff
+                combined = grad.add(diff, alpha=1 - beta2)
                 n.mul_(1 - beta3).addcmul_(combined, combined, value=beta3)
 
                 # eta_t
                 eta_t = lr / (n.sqrt().add(eps))
 
-                update = eta_t * (m + (1 - beta2) * v)
+                update = m.add(v, alpha=1 - beta2).mul(eta_t)
 
                 param.sub_(update)
                 param.div_(1.0 + weight_decay * lr)

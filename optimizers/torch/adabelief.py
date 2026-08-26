@@ -49,7 +49,7 @@ class AdaBeliefTorch(Optimizer):
                 m.mul_(beta1).add_(grad, alpha=1 - beta1)
 
                 # Belief variance
-                diff = grad - m
+                diff = grad.add(m, alpha=-1)
                 s.mul_(beta2).addcmul_(diff, diff, value=1 - beta2).add_(eps)
 
                 # Bias correction

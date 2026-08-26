@@ -126,13 +126,13 @@ class AdafactorTorch(Optimizer):
 
                 # RMS(X)
 
-                param_rms = (param.norm() / (param.numel() ** 0.5))
+                param_rms = torch.div(param.norm(), (param.numel() ** 0.5))
 
 
                 # alpha_t =
                 # max(eps2, RMS(X)) * rho_t
 
-                alpha_t = (max(eps2, param_rms.item(),) * rho_t)
+                alpha_t = torch.clamp(param_rms, min=eps2) * rho_t
 
 
                 # ==========================================
@@ -150,7 +150,7 @@ class AdafactorTorch(Optimizer):
                     # G^2 + eps1
                     # ======================================
 
-                    grad_squared = (grad * grad + eps1)
+                    grad_squared = torch.mul(grad, grad).add(eps1)
 
 
                     # ======================================
@@ -181,7 +181,7 @@ class AdafactorTorch(Optimizer):
                     # V_hat_t
                     # ======================================
 
-                    variance = (row_var @ col_var)
+                    variance = torch.matmul(row_var, col_var)
 
 
                     row_mean_value = (row_var.mean(dim=-2, keepdim=True,))
@@ -199,7 +199,7 @@ class AdafactorTorch(Optimizer):
                     variance = state["variance"]
 
 
-                    grad_squared = (grad * grad + eps1)
+                    grad_squared = torch.mul(grad, grad).add(eps1)
 
 
                     # V_hat_t =
@@ -216,7 +216,7 @@ class AdafactorTorch(Optimizer):
                 # U_t
                 # ==========================================
 
-                update = (grad / variance.sqrt())
+                update = torch.div(grad, variance.sqrt())
 
 
                 # ==========================================
@@ -225,14 +225,14 @@ class AdafactorTorch(Optimizer):
 
                 # RMS(U_t)
 
-                update_rms = (update.norm() / (update.numel() ** 0.5))
+                update_rms = torch.div(update.norm(), (update.numel() ** 0.5))
 
 
                 # U_hat_t =
                 # U_t /
                 # max(1, RMS(U_t) / d)
 
-                clip_denom = max(1.0, update_rms.item() / d,)
+                clip_denom = torch.clamp(update_rms / d, min=1.0)
 
 
                 update.div_(clip_denom)

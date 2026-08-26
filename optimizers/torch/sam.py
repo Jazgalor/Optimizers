@@ -11,6 +11,11 @@ class SAMTorch(torch.optim.Optimizer):
         self.param_groups = self.optimizer.param_groups
         self.state = self.optimizer.state
 
+        super().__init__(
+            self.param_groups,
+            dict(rho=rho)
+        )
+
     @torch.no_grad()
     def step(self, closure):
 
@@ -38,7 +43,7 @@ class SAMTorch(torch.optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                eps = self.rho * param.grad / grad_norm
+                eps = torch.div(torch.mul(param.grad, self.rho), grad_norm)
 
                 self.state[param]["eps"] = eps
 

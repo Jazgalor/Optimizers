@@ -44,10 +44,10 @@ class LionTorch(torch.optim.Optimizer):
                 m = state["m"]
 
                 # evolved sign direction
-                blended = beta1 * m + (1 - beta1) * grad
+                blended = m.mul(beta1).add(grad, alpha=1 - beta1)
 
                 # parameter update
-                update = blended.sign() + weight_decay * param
+                update = blended.sign().add(param, alpha=weight_decay)
 
                 param.add_(update, alpha=-lr)
 

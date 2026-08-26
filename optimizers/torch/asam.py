@@ -12,6 +12,14 @@ class ASAMTorch(torch.optim.Optimizer):
         self.param_groups = self.optimizer.param_groups
         self.state = self.optimizer.state
 
+        super().__init__(
+            self.param_groups,
+            dict(rho=rho,
+                 eps=eps
+
+            )
+        )
+
     @torch.no_grad()
     def step(self, closure):
 
@@ -30,7 +38,7 @@ class ASAMTorch(torch.optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                scaled = param.abs() * param.grad
+                scaled = torch.mul(param.abs(), param.grad)
                 norm_sq += torch.sum(scaled ** 2)
 
         norm = torch.sqrt(norm_sq)
@@ -44,9 +52,9 @@ class ASAMTorch(torch.optim.Optimizer):
                 if param.grad is None:
                     continue
 
-                perturbation = (param.abs() ** 2) * param.grad
+                perturbation = torch.mul((param.abs() ** 2), param.grad)
 
-                eps = self.rho * perturbation / norm
+                eps = torch.div(self.rho * perturbation, norm)
 
                 self.state[param]["eps"] = eps
 

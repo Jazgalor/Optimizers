@@ -69,21 +69,21 @@ class Ranger21Torch(Optimizer):
 
             return grad
 
-        param_norm = torch.norm(
+        param_norm = torch.linalg.vector_norm(
             param,
             dim=reduce_dims,
             keepdim=True,
         )
 
-        grad_norm = torch.norm(
+        grad_norm = torch.linalg.vector_norm(
             grad,
             dim=reduce_dims,
             keepdim=True,
         )
 
-        max_norm = torch.maximum(
+        max_norm = torch.clamp(
             param_norm,
-            torch.full_like(param_norm, eps),
+            min=eps,
         )
 
         scale = tau * max_norm / (grad_norm + 1e-8)

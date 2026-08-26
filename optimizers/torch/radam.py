@@ -72,13 +72,13 @@ class RAdamTorch(Optimizer):
                 # First moment:
                 # m_t = beta1 * m_(t-1) + (1 - beta1) * g_t
 
-                m.mul_(beta1).add_(grad, alpha=1.0 - beta1,)
+                m.mul_(beta1).add_(grad, alpha=1.0 - beta1)
 
 
                 # Second moment:
                 # v_t = beta2 * v_(t-1) + (1 - beta2) * g_t^2
 
-                v.mul_(1 / beta2).addcmul_(grad,grad, value=1.0 - beta2,)
+                v.mul_(beta2).addcmul_(grad,grad, value=1.0 - beta2)
 
 
                 # Bias correction of first moment:
@@ -91,7 +91,7 @@ class RAdamTorch(Optimizer):
 
                 beta2_t = beta2 ** t
 
-                rho_t = (self.rho_inf - (2.0 * t * beta2_t / (1.0 - beta2_t)))
+                rho_t = (self.rho_inf - ((2.0 * t * beta2_t) / (1.0 - beta2_t)))
 
 
                 if rho_t > 4:
@@ -99,28 +99,18 @@ class RAdamTorch(Optimizer):
                     # Variance rectification term
 
                     r_t = math.sqrt(
-                        (
-                            (rho_t - 4.0)
-                            * (rho_t - 2.0)
-                            * self.rho_inf
-                        )
-                        /
-                        (
-                            (self.rho_inf - 4.0)
-                            * (self.rho_inf - 2.0)
-                            * rho_t
-                        )
+                        ((rho_t - 4.0) * (rho_t - 2.0) * self.rho_inf) / ((self.rho_inf - 4.0) * (self.rho_inf - 2.0) * rho_t)
                     )
 
 
                     # Adaptive learning rate: l_t = sqrt(1 - beta2^t) / sqrt(v_t)
 
-                    adaptive_lr = (math.sqrt(1.0 - beta2_t / v.add(eps)))
+                    adaptive_lr = (torch.sqrt((1.0 - beta2_t) / v.add(eps)))
 
 
                     # theta_t = theta_(t-1) - alpha_t * r_t * l_t * m_hat_t
 
-                    update = (m_hat * adaptive_lr)
+                    update = torch.mul(m_hat, adaptive_lr)
 
                     param.add_(update, alpha=-lr * r_t,)
 
