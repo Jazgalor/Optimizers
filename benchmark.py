@@ -8,7 +8,7 @@ from models.resnet import ResNet20
 from models.resnet import ResNet110
 from models.wrn import WRN2810
 
-from optimizers.torch.lion import LionTorch #20
+from optimizers.torch.lion import LionTorch
 
 from optimizers.torch.sgd import SGDTorch
 from torch.optim.sgd import SGD
